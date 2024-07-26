@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-app-green
+  labels:
+    app: example-app
+    version: green
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: example-app
+      version: green
+  template:
+    metadata:
+      labels:
+        app: example-app
+        version: green
+    spec:
+      containers:
+      - name: example-app
+        image: your-docker-registry/example-app:latest
+        ports:
+        - containerPort: 8080
