@@ -1,0 +1,80 @@
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY = 'your-docker-registry'
+        IMAGE_NAME = 'example-app'
+        KUBECONFIG_CREDENTIALS_ID = 'kubeconfig-credentials-id'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/your-username/example-app.git', branch: 'main'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'npm test'
+            }
+        }
+
+        stage('Dockerize') {
+            steps {
+                script {
+                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    docker.build("${REGISTRY}/${IMAGE_NAME}:${commitId}").push()
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    def newVersion = "${REGISTRY}/${IMAGE_NAME}:${commitId}"
+                    kubernetesDeploy(newVersion)
+                }
+            }
+        }
+
+        stage('Disaster Recovery') {
+            steps {
+                script {
+                    try {
+                        kubernetesDeploy(newVersion)
+                    } catch (Exception e) {
+                        kubernetesRollback()
+                        error "Deployment failed, rolled back to previous version."
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
+
+def kubernetesDeploy(newVersion) {
+    sh """
+    kubectl set image deployment/example-app example-app=${newVersion}
+    kubectl rollout status deployment/example-app
+    """
+}
+
+def kubernetesRollback() {
+    sh """
+    kubectl rollout undo deployment/example-app
+    """
+}
